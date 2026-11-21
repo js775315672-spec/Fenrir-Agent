@@ -1,1 +1,1 @@
-{"agent": "fenrir", "checkpoint": null, "cycle": "d6034e28822d405fb02227dff16e787f", "expires": 1795263225.2026315, "generation": 6, "owner": "44901849349/1/3", "pending": null, "phase": "open", "results": {}, "schema": 1, "source": "b1454fc9bab573b7018103cce35e9a443b68dfd4"}
+{"agent": "fenrir", "checkpoint": null, "cycle": "d6034e28822d405fb02227dff16e787f", "expires": 1795263225.2026315, "generation": 6, "owner": "44901849349/1/3", "pending": "qwen-public-trial", "phase": "open", "results": {}, "schema": 1, "source": "b1454fc9bab573b7018103cce35e9a443b68dfd4"}
