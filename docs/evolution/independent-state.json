@@ -1,0 +1,38 @@
+{
+  "schema": "independent-agent-state-v1",
+  "agent_id": "fenrir",
+  "observed_at": "2026-11-21",
+  "source_branch": "main",
+  "operation_mode": "research_draft_only",
+  "evolution_status": "NOT_STARTED",
+  "last_verified_independent_gain": null,
+  "last_verified_cycle": null,
+  "current_assessment": "main README에는 제목만 존재한다. 본 독립 진화 실험의 측정된 개선이나 실행 증거는 아직 없다.",
+  "next_experiment": "독자적인 비판 주제와 반례 사례집을 구축하고 주장-증거-판정 계약을 최초 실험에 적용",
+  "metrics": {
+    "improvement_on_heldout": null,
+    "matched_end_to_end_seconds": null,
+    "regression_rate": null,
+    "resource_cost": null
+  },
+  "missing_measurements": [
+    "개체별 독립 실행 기준선",
+    "동일 조건 반복 측정",
+    "보호된 신규 평가",
+    "가설별 근거·아티팩트 해시"
+  ],
+  "evidence_urls": [
+    "https://github.com/js775315672-spec/Fenrir-Agent/blob/main/README.md"
+  ],
+  "imported_external_claims": [],
+  "status_vocabulary": [
+    "NOT_STARTED",
+    "PROPOSED",
+    "RUNNING",
+    "BLOCKED",
+    "INCONCLUSIVE",
+    "FAILED",
+    "VERIFIED",
+    "REJECTED"
+  ]
+}
