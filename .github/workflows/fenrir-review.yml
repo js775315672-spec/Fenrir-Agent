@@ -49,7 +49,7 @@ jobs:
       - name: Real Qwen inference (DEMO ONLY; no trusted O candidate)
         run: |
           python -m fenrir.reviewer --input out/candidate.json --output out/FENRIR_REPORT.json --model qwen2.5:0.5b
-          python scripts/check_output.py
+          python -m scripts.check_output
           sha256sum out/FENRIR_REPORT.json > out/FENRIR_REPORT.sha256
       - name: Upload report and reproducibility evidence
         if: always()
