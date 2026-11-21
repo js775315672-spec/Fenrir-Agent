@@ -29,3 +29,11 @@ Shared cycle `ORIL-OFC-PR346-001`; task `ORIL-OFC-PR346-001:F_REPORT_CONTRACT`.
 Ledger: https://github.com/js775315672-spec/Harness-Ouroboros-MCP/issues/347
 
 Cerberus gate: https://github.com/js775315672-spec/Cerberus/issues/2
+
+## GitHub-hosted Qwen demo (Draft PR branch only)
+
+A branch **push** starts `qwen-demo-inference` on a separate GitHub-hosted Ubuntu runner. It installs local Ollama, downloads `qwen2.5:0.5b`, executes actual model inference against a **public demonstration file** (`fixtures/demo_candidate.py`), validates the output and uploads `FENRIR_REPORT.json` and its SHA-256. If the job succeeds, `actions/attest-build-provenance@v2` attempts to issue a GitHub provenance attestation for the report file. The workflow has no write permission to repository contents and never merges or deploys.
+
+**Important limitations:** This is *not* a review of the actual Ouroboros PR #346. The demo cycle ID is deliberately distinct. The GitHub attestation identifies the GitHub workflow/run that generated the bytes; it does not prove model independence, reviewer quality, or that a candidate was supplied through a trusted channel. Attestation verification, authenticated O artifact ingestion, replay prevention, and Cerberus protected holdout remain blocked. The report is always `UNVERIFIED`.
+
+Review the Actions run and artifact before interpreting any status; installing Ollama or downloading model weights can fail on hosted runners. No protected evaluation data is sent to this public workflow.
