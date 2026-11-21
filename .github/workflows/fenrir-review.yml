@@ -16,7 +16,58 @@ jobs:
           python-version: '3.11'
       - name: Contract and fail-closed tests
         run: python -m unittest discover -s tests -v
-      - name: Explicit runtime boundary
+
+  qwen-demo-inference:
+    # Branch push only: never execute models from untrusted PR events.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/independent-qwen-review-v0-1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      OLLAMA_HOST: 127.0.0.1:11434
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare public demo candidate with verified file digest
+        run: python scripts/prepare_demo.py
+      - name: Install Ollama (CPU, no paid API)
         run: |
-          echo "CI tests the contract only."
-          echo "No Qwen model inference or authenticated FENRIR_REPORT is claimed."
+          curl --fail --location --silent --show-error https://ollama.com/install.sh -o /tmp/install-ollama.sh
+          bash /tmp/install-ollama.sh
+          ollama serve > /tmp/ollama.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:11434/api/tags >/dev/null
+          ollama pull qwen2.5:0.5b
+      - name: Real Qwen inference (DEMO ONLY; no trusted O candidate)
+        run: |
+          python -m fenrir.reviewer --input out/candidate.json --output out/FENRIR_REPORT.json --model qwen2.5:0.5b
+          python scripts/check_output.py
+          sha256sum out/FENRIR_REPORT.json > out/FENRIR_REPORT.sha256
+      - name: Upload report and reproducibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fenrir-qwen-demo-${{ github.run_id }}
+          path: |
+            out/
+            /tmp/ollama.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Attest report file digest (GitHub workflow provenance only)
+        if: success()
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: out/FENRIR_REPORT.json
+      - name: State non-approval boundary
+        if: always()
+        run: |
+          echo "Qwen demo inference is NOT an authenticated review of Ouroboros PR #346."
+          echo "FENRIR_VERIFIED=false; Cerberus protected replay is forbidden."
