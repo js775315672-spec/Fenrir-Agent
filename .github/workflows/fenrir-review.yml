@@ -1,0 +1,22 @@
+name: Fenrir independent reviewer (contract CI)
+on:
+  push:
+    branches: [feat/independent-qwen-review-v0-1]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Contract and fail-closed tests
+        run: python -m unittest discover -s tests -v
+      - name: Explicit runtime boundary
+        run: |
+          echo "CI tests the contract only."
+          echo "No Qwen model inference or authenticated FENRIR_REPORT is claimed."
