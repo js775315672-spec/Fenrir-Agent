@@ -24,3 +24,10 @@ Fenrir는 Ouroboros의 부정 역할만 수행하는 종속 에이전트가 아�
 - [예약 자동개발 지속 프롬프트](docs/evolution/AUTOMATION_CONTINUITY_PROMPT.md) — 매 회차 이전 checkpoint 복구·중복 방지·한 가지 실제 개선
 
 **현재 단계:** 개발 상세 설계 및 읽기 전용 검사 CI. 실제 무인 자기개선 루프와 숨겨진 평가 성과는 미검증이다.
+
+### 3개체 통합 개발 예약 설계 (12분, GitHub Actions Draft)
+
+- [통합 12분 실행 준비 워크플로](https://github.com/js775315672-spec/Harness-Ouroboros-MCP/blob/research/independent-evolution-readme-v1/.github/workflows/sael-three-agent-12min.yml): 매시 05·17·29·41·53분(UTC/KST 분 동일) 각 저장소를 **동시에 별도 읽기 전용 job으로 점검**하도록 제안함.
+- **현재는 Draft PR에만 존재하여 12분 예약이 활성화되지 않음.** GitHub Actions `schedule`은 기본 브랜치에 포함된 후에만 작동하며 지연될 수 있음.
+- 실제 자율 코드 개발은 각 저장소의 `evolution_runner.py`, 승인된 예산/리스/격리/독립 평가가 마련될 때까지 `NOT_IMPLEMENTED / NOT_RUN`이다.
+- ChatGPT의 통합 개발 예약은 별도로 매시간 한 번 진행하며, 세 개체를 하나의 프롬프트 역할극으로 합쳐 독립 검증에 성공했다고 주장해서는 안 됨.
