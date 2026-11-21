@@ -15,3 +15,12 @@ Fenrir는 Ouroboros의 부정 역할만 수행하는 종속 에이전트가 아�
 
 첫 실행 연구 도구는 `python scripts/evolution_context.py check`와 `python scripts/evolution_context.py context`다. 이 코드는 로컬 기억을 읽고 검증할 뿐 LLM 호출이나 백그라운드 자율실행을 시작하지 않는다.
 
+
+### 독립 자율진화 상세 개발 명세
+
+- [독립 자율개선 루프 상세 계약 v2.0](docs/evolution/standalone-autonomy-spec-v2.md) — 내부 12개 모듈, 상태 기계, 증거 계약, 구현 단계
+- [fenrir 전용 구현 계약](docs/evolution/fenrir-implementation-spec-v1.md) — 독자 목표, 평가 및 자체 개선 방법
+- [23개 수락 테스트 계획](docs/evolution/acceptance-test-plan-v1.md) — 완료/차단 판정 조건
+- [예약 자동개발 지속 프롬프트](docs/evolution/AUTOMATION_CONTINUITY_PROMPT.md) — 매 회차 이전 checkpoint 복구·중복 방지·한 가지 실제 개선
+
+**현재 단계:** 개발 상세 설계 및 읽기 전용 검사 CI. 실제 무인 자기개선 루프와 숨겨진 평가 성과는 미검증이다.
