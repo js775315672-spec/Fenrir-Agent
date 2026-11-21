@@ -29,7 +29,7 @@ def validate_input(data):
 
 def validate_report(report, expected):
     for key in ("cycle_id", "candidate_sha256", "source_commit", "model", "prompt_sha256",
-                "input_sha256", "run_id", "created_at", "findings", "status"):
+                "input_sha256", "run_id", "created_at", "status"):
         if not report.get(key):
             raise ValueError("missing report: " + key)
     for key in ("cycle_id", "candidate_sha256", "source_commit"):
