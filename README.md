@@ -34,3 +34,10 @@
 - DEV-only: `agent/github_artifact_evidence.py` fetches GitHub run and artifact metadata using a separately provided read-only token; verifies repository, exact head SHA, successful completed run, artifact binding, expiry and SHA-256 of downloaded ZIP (50 MB limit).
 - Windows/Linux test: `tests/test_github_artifact_evidence.py` (mock transport). The workflow executes both planner and provenance tests. A mocked PASS is **not** a live authenticated artifact verification.
 - **BLOCKED** until the newest CI for this exact README head passes on both OSes, a real artifact is available and independently authenticated, lease and zero-cost provider are verified. No real Qwen calls, independent improvements, or operational cycles are claimed.
+
+
+### OFC P0 live audit snapshot (2026-11-23)
+- Inspected pre-documentation DEV head: `a964b0b7a4654eec537f6f906cd67e3e4f9581a0`; P0 Actions run: https://github.com/js775315672-spec/Fenrir-Agent/actions/runs/45048554933.
+- Observed at audit: Windows regression and Ubuntu CAS running; other jobs queued; no artifact.
+- Final `verify-live-artifacts` job: NOT_PASSED / not yet executed. P0 overall BLOCKED; no new Qwen invocation, independent improvement, or verified operational cycle.
+- Snapshot only: this README commit changes the DEV head and requires fresh head-bound CI; do not promote previous-run evidence as current-head PASS. main, OPS, PROTECTED and automations unchanged.
