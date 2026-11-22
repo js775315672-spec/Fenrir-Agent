@@ -191,6 +191,18 @@ with patch('cycle_registry.time.time', return_value=100):
         self.assertEqual(after["results"], before["results"])
 
 
+    def test_dev_duplicate_reserve_does_not_erase_pending(self):
+        self.call("acquire")
+        self.call("reserve", value="first-operation")
+        before = self.call("inspect")
+        with self.assertRaises(Blocked):
+            self.call("reserve", value="second-operation")
+        after = self.call("inspect")
+        self.assertEqual(after["pending"], "first-operation")
+        self.assertEqual(after["results"], before["results"])
+        self.assertEqual(after["generation"], before["generation"])
+
+
 
 if __name__ == "__main__":
     unittest.main()
