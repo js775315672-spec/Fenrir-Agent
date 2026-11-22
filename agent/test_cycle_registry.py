@@ -178,6 +178,19 @@ with patch('cycle_registry.time.time', return_value=100):
         with self.assertRaises(Blocked):
             self.call("acquire", "next")
 
+    def test_dev_replay_wrong_generation_preserves_registry(self):
+        self.call("acquire")
+        self.call("reserve", value="attack-replay")
+        before = self.call("inspect")
+        with self.assertRaises(Blocked):
+            self.call("record", gen=0, value="attack-replay=fake-receipt")
+        with self.assertRaises(Blocked):
+            self.call("record", owner="attacker", value="attack-replay=fake-receipt")
+        after = self.call("inspect")
+        self.assertEqual(after["pending"], before["pending"])
+        self.assertEqual(after["results"], before["results"])
+
+
 
 if __name__ == "__main__":
     unittest.main()
