@@ -1,0 +1,46 @@
+name: Ponytail D2 independent Fenrir real candidate
+on:
+  push:
+    branches: [dev/ponytail-d2-fenrir-20261127]
+    paths: ['fenrir/d2_review.py', 'tests/test_d2_review.py', 'handoff/d2-raw-1.zip', '.github/workflows/ponytail-d2-fenrir.yml']
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      OLLAMA_HOST: 127.0.0.1:11434
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify real candidate and review contract
+        run: python3 -B -m unittest discover -s tests -p 'test_d2_review.py' -v
+      - name: CPU Qwen setup
+        run: |
+          curl --fail --location --silent --show-error https://ollama.com/install.sh -o /tmp/install-ollama.sh
+          bash /tmp/install-ollama.sh
+          ollama serve > /tmp/ollama.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:11434/api/tags >/dev/null
+          ollama pull qwen2.5:1.5b
+      - name: Actual independent Qwen candidate review
+        run: python3 -B -m fenrir.d2_review
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: out/FENRIR_REPORT.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fenrir-d2-evidence
+          path: out/
+          if-no-files-found: warn
+          retention-days: 14
