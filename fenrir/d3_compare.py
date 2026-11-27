@@ -62,7 +62,8 @@ def prompt(case,mode,candidate):
     else:
         base+="Compute the expected sum as a decimal string, copy the observed response, and decide mismatch. "
     base+="Choose risk possible_digit_integer_conflict only if the observed answer is incorrect, otherwise no_mismatch_in_this_case. This is a hypothesis, not proof. Propose a fresh two-digit-plus-one-digit addition (test_a 10..90, test_b 1..9) other than the given case. Explain digit versus integer risk or the lack of an observed mismatch in this case in rationale."
-    if mode=="direct": base+=" Also give test_expected as the correct decimal sum."
+    base+=" Use one short rationale sentence (12 to 30 words). Never repeat the question. Return the risk field consistent with the actual mismatch, not the instruction alone. A matching answer is no_mismatch_in_this_case. The proposed test must not be any of these existing pairs: "+json.dumps(sorted(PUBLIC))+"."
+    if mode=="direct": base+=" Give expected and test_expected as base-10 integer strings without a decimal point."
     return base
 
 def grade(case,mode,raw):
@@ -124,7 +125,7 @@ def run(size):
     rows=[]
     Path("out").mkdir(exist_ok=True)
     # warm up once outside measured cases, same settings as all subsequent calls
-    options={"temperature":0,"seed":42,"num_thread":2,"num_ctx":2048,"num_predict":192,"num_gpu":0}
+    options={"temperature":0,"seed":42,"num_thread":2,"num_ctx":2048,"num_predict":384,"num_gpu":0}
     warm=api("/api/chat",{"model":model,"messages":[{"role":"user","content":"Reply with OK."}],"stream":False,"options":options,"keep_alive":"10m"})
     require(warm.get("done") is True,"warmup failed")
     for i,case in enumerate(samples):
