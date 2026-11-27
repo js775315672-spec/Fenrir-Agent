@@ -1,0 +1,84 @@
+name: Ponytail D3-C5 separated public facts and proposal generation
+on:
+  push:
+    branches: [dev/ponytail-d3-c5-20261127]
+    paths: ['fenrir/d3_c5.py', 'tests/test_d3_c5.py', '.github/workflows/ponytail-d3-c5.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ponytail-d3-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        size: ['0.5b','1.5b','3b']
+    env:
+      OLLAMA_HOST: 127.0.0.1:11434
+      CUDA_VISIBLE_DEVICES: '-1'
+      ROCR_VISIBLE_DEVICES: '-1'
+      GGML_VK_VISIBLE_DEVICES: '-1'
+      OLLAMA_VULKAN: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: python3 -B -m unittest discover -s tests -p 'test_d3_c5.py' -v
+      - name: CPU setup
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error https://ollama.com/install.sh -o /tmp/install-ollama.sh
+          bash /tmp/install-ollama.sh
+          sudo systemctl stop ollama.service
+          if curl --silent http://127.0.0.1:11434/api/tags >/dev/null; then echo "unexpected existing server"; exit 1; fi
+          ollama serve > /tmp/ollama.log 2>&1 &
+          server_pid=$!
+          echo "CPU-controlled server PID: $server_pid"
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:11434/api/tags >/dev/null
+          kill -0 "$server_pid"
+          ollama pull "qwen2.5:${{ matrix.size }}"
+          ollama --version
+      - name: Actual constrained hypothesis generation
+        run: python3 -B -m fenrir.d3_c5 "${{ matrix.size }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: d3-c5-proposal-${{ matrix.size }}
+          path: |
+            out/
+            /tmp/ollama.log
+          if-no-files-found: warn
+  selection:
+    needs: benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: d3-c5-proposal-*
+          path: bench
+      - name: Regrade test proposals and select smallest qualifying model
+        run: python3 -B -m fenrir.d3_c5 select
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: out/FENRIR_PROPOSALS.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: d3-c5-selection
+          path: out/
+          if-no-files-found: warn
