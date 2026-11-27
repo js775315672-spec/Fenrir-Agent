@@ -1,6 +1,7 @@
 import unittest
+import json
 from pathlib import Path
-from fenrir.d2_review import load_candidate, quality
+from fenrir.d2_review import load_candidate, quality, adapt_review
 
 class D2Tests(unittest.TestCase):
     def test_pinned_real_candidate(self):
@@ -22,3 +23,11 @@ class D2Tests(unittest.TestCase):
             report["findings"] = [dict(f,**changed)]
             with self.assertRaises(ValueError):
                 quality(report,c)
+
+    def test_model_exact_counterexample_and_new_test(self):
+        c=load_candidate(Path("handoff/d2-raw-1.zip"))
+        x=dict(group_id="public-arithmetic-09",expected="38",observed="4",hypothesis="The single digit instruction may conflict with multi-digit integer answers.",test_a=21,test_b=12,test_expected="33")
+        self.assertEqual(adapt_review(json.dumps(x),c)[0]["classification"],"hypothesis")
+        for changed in (dict(group_id="public-arithmetic-01"),dict(expected="37"),dict(observed="38"),dict(test_expected="34"),dict(test_a=35,test_b=3,test_expected="38"),dict(hypothesis="unrelated")):
+            with self.assertRaises(ValueError):
+                adapt_review(json.dumps(dict(x,**changed)),c)

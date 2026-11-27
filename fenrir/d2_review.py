@@ -51,6 +51,7 @@ def load_candidate(path):
     if len(rows) != 30:
         raise ValueError("wrong public group count")
     wrong = []
+    samples = []
     for i, row in enumerate(rows):
         a, b = 11+3*i, 2+i%7
         gid = f"public-arithmetic-{i+1:02d}"
@@ -60,13 +61,16 @@ def load_candidate(path):
         obs = [o for o in row["observations"] if o["variant"] == "compact"]
         if len(obs) != 1 or type(obs[0]["output"]) is not str:
             raise ValueError("missing compact observation")
+        sample = {"group_id": gid, "question": row["question"], "expected": expected, "observed": obs[0]["output"], "a": a, "b": b}
+        samples.append(sample)
         if obs[0]["output"].strip() != expected:
-            wrong.append({"group_id": gid, "question": row["question"], "expected": expected, "observed": obs[0]["output"]})
+            wrong.append(sample)
     if not wrong:
         raise ValueError("unexpected missing counterexample")
     return validate_input({"cycle_id": CYCLE, "candidate_sha256": CANDIDATE_SHA,
                            "source_commit": SOURCE, "evidence_urls": [URL],
-                           "candidate_text": c["prompt"], "public_counterexamples": wrong})
+                           "candidate_text": c["prompt"], "public_counterexamples": wrong,
+                           "review_samples": [samples[0], wrong[0]]})
 
 def quality(report, candidate):
     validate_report(report, candidate)
@@ -81,6 +85,43 @@ def quality(report, candidate):
         if f["pass_criteria"].strip().casefold() == f["fail_criteria"].strip().casefold():
             raise ValueError("pass and fail criteria must differ")
 
+def narrow_schema(candidate):
+    fields = {"group_id":{"type":"string","enum":[x["group_id"] for x in candidate["review_samples"]]},
+              "expected":{"type":"string"}, "observed":{"type":"string"}, "hypothesis":{"type":"string"},
+              "test_a":{"type":"integer","minimum":10,"maximum":99},
+              "test_b":{"type":"integer","minimum":1,"maximum":99},
+              "test_expected":{"type":"string"}}
+    return {"type":"object","required":list(fields),"additionalProperties":False,"properties":fields}
+
+def adapt_review(answer, candidate):
+    x = strict_json(answer)
+    actual = next((s for s in candidate["review_samples"] if s["group_id"] == x.get("group_id")), None)
+    if actual is None or actual["expected"] == actual["observed"].strip():
+        raise ValueError("model did not select an actual erroneous example")
+    if x.get("expected") != actual["expected"] or x.get("observed") != actual["observed"]:
+        raise ValueError("model did not identify exact correct and observed answers")
+    a,b = x.get("test_a"),x.get("test_b")
+    if type(a) is not int or type(b) is not int or not 10<=a<=99 or not 1<=b<=99 or not 10<=a+b<=99 or x.get("test_expected")!=str(a+b):
+        raise ValueError("model did not propose valid two-digit addition test")
+    # It must be new to the known 30-group public suite, including reversed operands.
+    if any(sorted((a,b))==sorted((11+3*i,2+i%7)) for i in range(30)):
+        raise ValueError("model repeated an existing public question")
+    h=x.get("hypothesis")
+    if not isinstance(h,str) or "digit" not in h.lower() or len(h.strip())<12:
+        raise ValueError("model did not explain digit-related risk")
+    return [{"finding_id":actual["group_id"],"severity":"P2","classification":"hypothesis",
+             "summary":h,"reproduction":f'{actual["group_id"]}: expected {x["expected"]}; observed {x["observed"]}',
+             "attack_test":f"Proposed, not executed: compare digit vs integer instruction on {a} + {b}.",
+             "pass_criteria":f"Exact answer {a+b}","fail_criteria":f"Any answer other than {a+b}",
+             "evidence_urls":candidate["evidence_urls"]}]
+
+def review_prompt(candidate):
+    samples = "\n".join(f'{s["group_id"]}: {s["a"]} + {s["b"]}; observed answer: {s["observed"]}' for s in candidate["review_samples"])
+    return ("Audit the arithmetic outputs. System prompt under test: "+candidate["candidate_text"]+
+            "\nThe task asks for an integer, not necessarily one digit. Select an incorrect row and calculate its correct answer. "
+            "Return its exact group_id, expected answer, observed answer, and a hypothesis about the word digit. "
+            "Also propose a new two-digit addition test: test_a, test_b, test_expected. Do not reuse the examples or claim causation.\n"+samples)
+
 def main():
     out = Path("out")
     out.mkdir(exist_ok=False)
@@ -92,14 +133,9 @@ def main():
     matches = [m for m in models if m["name"] == MODEL]
     if len(matches) != 1 or len(matches[0]["digest"]) != 64:
         raise ValueError("model digest unavailable")
-    prompt = ("Review the supplied public arithmetic prompt and actual wrong answers. "
-              "The model cannot prove causation. Return one testable hypothesis, not a confirmed claim. "
-              "Use classification hypothesis, severity P2 or P3, all required fields. "
-              "In reproduction include an exact public-arithmetic group ID, expected and observed answer. "
-              "Propose a concrete attack_test and distinguish pass_criteria from fail_criteria. "
-              "Use only the supplied evidence URL. Never approve the candidate. Input: " + raw.decode())
+    prompt = review_prompt(candidate)
     for attempt in (1, 2):
-        answer = call_qwen("http://127.0.0.1:11434", MODEL, prompt)
+        answer = call_qwen("http://127.0.0.1:11434", MODEL, prompt, schema=narrow_schema(candidate))
         (out/f"model-output-{attempt}.json").write_text(answer, encoding="utf-8")
         try:
             report = {
@@ -108,7 +144,8 @@ def main():
                 "prompt_sha256": digest(prompt.encode()), "input_sha256": digest(raw),
                 "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
                 "reviewer_commit": os.environ["GITHUB_SHA"], "created_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
-                "findings": parse_findings(answer), "measured_counterexamples": candidate["public_counterexamples"],
+                "findings": adapt_review(answer, candidate), "measured_counterexamples": candidate["public_counterexamples"],
+                "model_raw_output_sha256": digest(answer.encode()), "finding_metadata_origin": "deterministic adapter; model selects example, computes answers, provides hypothesis and test",
                 "status": "UNVERIFIED", "promotion_allowed": False, "protected_grade": "pending"
             }
             quality(report, candidate)

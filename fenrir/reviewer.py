@@ -81,13 +81,13 @@ def validate_report(report, expected):
             raise ValueError("finding evidence not supplied by candidate")
     return report
 
-def call_qwen(endpoint, model, prompt):
+def call_qwen(endpoint, model, prompt, schema=None):
     if not endpoint.startswith("http://127.0.0.1:") and not endpoint.startswith("http://localhost:"):
         raise ValueError("only local Qwen endpoint permitted")
     payload = json.dumps({"model": model, "messages": [
         {"role": "system", "content": "You are an independent skeptical code reviewer. Return JSON only. Never invent evidence URLs. Mark untested risks as hypothesis."},
         {"role": "user", "content": prompt}
-    ], "stream": False, "format": FINDINGS_SCHEMA, "options": {"temperature": 0}}).encode()
+    ], "stream": False, "format": FINDINGS_SCHEMA if schema is None else schema, "options": {"temperature": 0}}).encode()
     request = Request(endpoint.rstrip("/") + "/api/chat", payload,
                       {"Content-Type": "application/json"}, method="POST")
     with urlopen(request, timeout=180) as response:
