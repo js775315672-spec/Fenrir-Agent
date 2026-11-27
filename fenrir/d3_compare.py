@@ -5,6 +5,7 @@ import math
 import os
 from pathlib import Path
 import statistics
+import subprocess
 import sys
 import time
 from urllib.request import Request, urlopen
@@ -106,8 +107,9 @@ def run(size):
     require(len(matches)==1 and len(matches[0]["digest"])==64,"model digest")
     model_digest=matches[0]["digest"]
     rows=[]
+    Path("out").mkdir(exist_ok=True)
     # warm up once outside measured cases, same settings as all subsequent calls
-    options={"temperature":0,"seed":42,"num_thread":2,"num_ctx":2048,"num_predict":192}
+    options={"temperature":0,"seed":42,"num_thread":2,"num_ctx":2048,"num_predict":192,"num_gpu":0}
     warm=api("/api/chat",{"model":model,"messages":[{"role":"user","content":"Reply with OK."}],"stream":False,"options":options,"keep_alive":"10m"})
     require(warm.get("done") is True,"warmup failed")
     for i,case in enumerate(samples):
@@ -123,7 +125,12 @@ def run(size):
             running=[m for m in ps if m["name"]==model]
             require(len(running)==1 and running[0]["digest"]==model_digest,"running model drift")
             row={"id":case["id"],"mode":mode,"prompt_sha256":sha(p.encode()),"raw":raw,"result":result,"wall_seconds":seconds,"eval_count":response["eval_count"],"eval_duration_ns":response.get("eval_duration"),"rss_sample_mib":rss_mib(),"model_loaded_bytes":running[0]["size"],"model_vram_bytes":running[0]["size_vram"]}
-            require(row["model_vram_bytes"]==0,"GPU execution unexpected")
+            processor=subprocess.check_output(["ollama","ps"],text=True,timeout=15)
+            row["processor_listing"]=processor
+            with (Path("out")/f"diagnostics-{size}.jsonl").open("a",encoding="utf-8") as f:
+                f.write(json.dumps(row,ensure_ascii=False)+"\n")
+            print("processor",processor,"reported VRAM bytes",row["model_vram_bytes"],flush=True)
+            require(row["model_vram_bytes"]==0 and "100% CPU" in processor,"CPU-only execution not proven")
             rows.append(row)
             print(size,mode,case["id"],"PASS" if result["pass"] else result["reason"],round(seconds,3),flush=True)
     obj={"schema":1,"run_id":os.environ["GITHUB_RUN_ID"],"run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],"commit":os.environ["GITHUB_SHA"],"candidate_sha256":CANDIDATE_SHA,"archive_sha256":ARCHIVE_SHA,"cycle_id":CYCLE,"model":model,"model_digest":model_digest,"ollama_version":api("/api/version")["version"],"cases":samples,"rows":rows,"runner_cpu_threads":os.cpu_count(),"options":options,"status":"UNVERIFIED","promotion_allowed":False}
@@ -140,7 +147,7 @@ def summarize(obj,candidate,samples):
         require([r["id"] for r in rs]==[c["id"] for c in samples],"missing or reordered cases")
         for r,c in zip(rs,samples):
             require(r["prompt_sha256"]==sha(prompt(c,mode,candidate).encode()) and r["result"]==grade(c,mode,r["raw"]),"raw grade mismatch")
-            require(type(r["eval_count"]) is int and r["eval_count"]>0 and type(r["wall_seconds"]) in (float,int) and math.isfinite(r["wall_seconds"]) and r["wall_seconds"]>0 and r["model_vram_bytes"]==0,"measurement")
+            require(type(r["eval_count"]) is int and r["eval_count"]>0 and type(r["wall_seconds"]) in (float,int) and math.isfinite(r["wall_seconds"]) and r["wall_seconds"]>0 and r["model_vram_bytes"]==0 and "100% CPU" in r["processor_listing"],"measurement")
         stats[mode]={"passed":sum(r["result"]["pass"] for r in rs),"total":6,"median_seconds":round(statistics.median(r["wall_seconds"] for r in rs),4),"max_sampled_rss_mib":round(max(r["rss_sample_mib"] for r in rs),2),"model_loaded_mib":round(max(r["model_loaded_bytes"] for r in rs)/1048576,2)}
     return stats
 
