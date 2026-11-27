@@ -89,16 +89,31 @@ def api(path,payload=None,timeout=180):
     with urlopen(request,timeout=timeout) as r:
         return strict_json(r.read())
 
-def rss_mib():
-    total=0
+def cpu_proof():
+    # Ollama's scheduler may count CPU AMX model buffers as GPU memory.
+    # Do not use its contradictory VRAM field as hardware evidence.
+    devices=sorted(str(p) for pat in ("/dev/nvidia*","/dev/kfd","/dev/dri/renderD*") for p in Path("/").glob(pat.lstrip("/")))
+    total=0;maps=[];count=0
     for p in Path("/proc").glob("[0-9]*/comm"):
         try:
-            if p.read_text().strip().startswith("ollama"):
+            name=p.read_text().strip()
+            if name.startswith("ollama") or "llama-server" in name:
+                memory=(p.parent/"maps").read_text()
+                maps.extend(memory.splitlines())
+                count+=1
                 for line in (p.parent/"status").read_text().splitlines():
                     if line.startswith("VmRSS:"):
                         total+=int(line.split()[1]);break
         except (OSError,ValueError): pass
-    return total/1024
+    lower="\n".join(maps).lower()
+    gpu=[s for s in ("libggml-cuda","libggml-hip","libggml-vulkan","libcuda.so","libamdhip64.so","libggml-rocm") if s in lower]
+    log=Path("/tmp/ollama.log").read_text(errors="replace")
+    proof={"gpu_device_nodes":devices,"gpu_backend_mappings":gpu,"cpu_backend_mapped":"libggml-cpu" in lower,"cpu_daemon_log":'id=cpu library=cpu' in log and "loaded CPU backend" in log and "CPU compute buffer size" in log,"processes_sampled":count}
+    return proof,total/1024
+
+def proven_cpu(p):
+    return p["gpu_device_nodes"]==[] and p["gpu_backend_mappings"]==[] and p["cpu_backend_mapped"] is True and p["cpu_daemon_log"] is True and p["processes_sampled"]>=2
+
 
 def run(size):
     candidate,samples=cases()
@@ -124,13 +139,14 @@ def run(size):
             ps=api("/api/ps")["models"]
             running=[m for m in ps if m["name"]==model]
             require(len(running)==1 and running[0]["digest"]==model_digest,"running model drift")
-            row={"id":case["id"],"mode":mode,"prompt_sha256":sha(p.encode()),"raw":raw,"result":result,"wall_seconds":seconds,"eval_count":response["eval_count"],"eval_duration_ns":response.get("eval_duration"),"rss_sample_mib":rss_mib(),"model_loaded_bytes":running[0]["size"],"model_vram_bytes":running[0]["size_vram"]}
+            proof,rss=cpu_proof()
+            row={"id":case["id"],"mode":mode,"prompt_sha256":sha(p.encode()),"raw":raw,"result":result,"wall_seconds":seconds,"eval_count":response["eval_count"],"eval_duration_ns":response.get("eval_duration"),"rss_sample_mib":rss,"cpu_proof":proof,"model_loaded_bytes":running[0]["size"],"model_vram_bytes":running[0]["size_vram"]}
             processor=subprocess.check_output(["ollama","ps"],text=True,timeout=15)
             row["processor_listing"]=processor
             with (Path("out")/f"diagnostics-{size}.jsonl").open("a",encoding="utf-8") as f:
                 f.write(json.dumps(row,ensure_ascii=False)+"\n")
             print("processor",processor,"reported VRAM bytes",row["model_vram_bytes"],flush=True)
-            require(row["model_vram_bytes"]==0 and "100% CPU" in processor,"CPU-only execution not proven")
+            require(proven_cpu(proof),"CPU-only execution not proven by device, process and backend evidence")
             rows.append(row)
             print(size,mode,case["id"],"PASS" if result["pass"] else result["reason"],round(seconds,3),flush=True)
     obj={"schema":1,"run_id":os.environ["GITHUB_RUN_ID"],"run_attempt":os.environ["GITHUB_RUN_ATTEMPT"],"commit":os.environ["GITHUB_SHA"],"candidate_sha256":CANDIDATE_SHA,"archive_sha256":ARCHIVE_SHA,"cycle_id":CYCLE,"model":model,"model_digest":model_digest,"ollama_version":api("/api/version")["version"],"cases":samples,"rows":rows,"runner_cpu_threads":os.cpu_count(),"options":options,"status":"UNVERIFIED","promotion_allowed":False}
@@ -147,7 +163,7 @@ def summarize(obj,candidate,samples):
         require([r["id"] for r in rs]==[c["id"] for c in samples],"missing or reordered cases")
         for r,c in zip(rs,samples):
             require(r["prompt_sha256"]==sha(prompt(c,mode,candidate).encode()) and r["result"]==grade(c,mode,r["raw"]),"raw grade mismatch")
-            require(type(r["eval_count"]) is int and r["eval_count"]>0 and type(r["wall_seconds"]) in (float,int) and math.isfinite(r["wall_seconds"]) and r["wall_seconds"]>0 and r["model_vram_bytes"]==0 and "100% CPU" in r["processor_listing"],"measurement")
+            require(type(r["eval_count"]) is int and r["eval_count"]>0 and type(r["wall_seconds"]) in (float,int) and math.isfinite(r["wall_seconds"]) and r["wall_seconds"]>0 and proven_cpu(r["cpu_proof"]),"measurement")
         stats[mode]={"passed":sum(r["result"]["pass"] for r in rs),"total":6,"median_seconds":round(statistics.median(r["wall_seconds"] for r in rs),4),"max_sampled_rss_mib":round(max(r["rss_sample_mib"] for r in rs),2),"model_loaded_mib":round(max(r["model_loaded_bytes"] for r in rs)/1048576,2)}
     return stats
 
